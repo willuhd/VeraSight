@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeraSight Dashboard</title>
+    
+    <!-- Secondary Font: Inter (Google Fonts CDN) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Production Builds of Three.js & Controls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- Style configuration mirroring AI Studio palette and typography -->
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg-main: #ffffff; --bg-sidebar: #fcfcfc; --bg-hover: #f2f2f2;
+            --bg-elevated: #f2f2f2; --bg-subtle: #fcfcfc; --bg-translucent: rgba(255, 255, 255, 0.75);
+            --border: #eaeaea; --text-primary: #2d2d2d; --text-secondary: #6e6e6e;
+            --primary: #2d2d2d; --primary-hover: #1a1a1a; --primary-text: #ffffff;
+            --disabled: #9e9e9e; --placeholder-color: #8e8e93; --btn-border: #ebebeb;
+            --slider-color: var(--text-secondary); --radius: 8px;
+            --font-main: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color-scheme: light;
+            --gaze-orange: #f97316; --status-green: #16a34a; --status-red: #ef4444; --status-yellow: #eab308;
+        }
+        :root[data-theme="dark"] {
+            --bg-main: #191919; --bg-sidebar: #252525; --bg-hover: #2d2d2d;
+            --bg-elevated: #2d2d2d; --bg-subtle: #252525; --bg-translucent: rgba(25, 25, 25, 0.75);
+            --border: #3a3a3a; --text-primary: #d4d4d4; --text-secondary: #8c8c8c;
+            --primary: #d4d4d4; --primary-hover: #eeeeee; --primary-text: #191919;
+            --disabled: #585858; --placeholder-color: #636366; --btn-border: #393939;
+            --slider-color: #ababab; color-scheme: dark;
+        }
+        body { font-family: var(--font-main); color: var(--text-primary); background: var(--bg-main); display: flex; flex-direction: column; height: 100vh; overflow: hidden; transition: background 0.3s, color 0.3s; }
+        header { background-color: var(--bg-sidebar); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; justify-content: space-between; align-items: center; height: 56px; flex-shrink: 0; transition: background 0.3s, border-color 0.3s; }
+        .logo-section h1 { font-family: var(--font-main); font-weight: 300; font-size: 24px; letter-spacing: -0.01em; color: var(--text-primary); }
+        .metrics-bar { display: flex; gap: 12px; align-items: center; }
+        .metric-pill { font-size: 13px; color: var(--text-secondary); background-color: var(--bg-hover); border: 1px solid var(--border); padding: 4px 12px; border-radius: var(--radius); font-family: var(--font-main); display: flex; align-items: center; gap: 6px; transition: background 0.3s, border-color 0.3s; }
+        .metric-pill span.mono-num { font-family: monospace; font-size: 13px; color: var(--text-primary); }
+        .metric-pill span.unit-txt { font-family: var(--font-main); font-size: 13px; color: var(--text-secondary); margin-left: 1px; }
+        #status-txt { font-family: var(--font-main) !important; font-size: 13px; font-weight: 500; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--status-red); transition: background-color 0.30s ease; }
+        main { display: flex; flex: 1; height: calc(100vh - 56px); overflow: hidden; padding: 16px; gap: 16px; background-color: var(--bg-main); transition: background 0.3s; }
+        .sidebar { width: 380px; display: flex; flex-direction: column; gap: 16px; height: 100%; flex-shrink: 0; }
+        .panel-blend { flex: 1; border: 1px solid var(--border); border-radius: 12px; background-color: var(--bg-subtle); display: flex; flex-direction: column; overflow: hidden; transition: background 0.3s, border-color 0.3s; }
+        
+        /* Thinner panel-header bar heights */
+        .panel-header { padding: 8px 14px; font-size: 13px; font-weight: 500; color: var(--text-primary); border-bottom: 1px solid var(--border); font-family: var(--font-main); text-transform: none; }
+        
+        .blend-list { 
+            display: flex; 
+            flex-direction: column; 
+            overflow-y: auto; 
+            padding: 12px 16px; 
+            transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+            will-change: opacity; 
+            min-height: 0; 
+        }
+        .blend-list.dimmed { opacity: 0.25; }
+        
+        .blend-row { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            height: 32px; 
+            flex-shrink: 0; 
+            gap: 12px; 
+            border-bottom: 1px solid var(--border); 
+            box-sizing: border-box;
+        }
+        .blend-name { font-family: var(--font-main); font-size: 12px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 140px; }
+        .blend-bar-container { 
+            flex: 1; 
+            height: 6px; 
+            background-color: var(--bg-hover); 
+            border-radius: 3px; 
+            overflow: hidden; 
+            position: relative; 
+            backface-visibility: hidden;
+        }
+        .blend-bar-fill { 
+            position: absolute; 
+            left: 0; 
+            top: 0; 
+            height: 100%; 
+            width: 100%; 
+            background: linear-gradient(90deg, var(--primary), var(--text-secondary)); 
+            border-radius: 3px; 
+            transform-origin: left; 
+            transform: scale3d(0, 1, 1); 
+            will-change: transform; 
+            backface-visibility: hidden;
+            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .blend-val { font-family: monospace; font-size: 11px; color: var(--text-secondary); width: 32px; text-align: right; }
+        
+        .panel-static-analysis { height: 280px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 12px; background-color: var(--bg-subtle); display: flex; flex-direction: column; overflow: hidden; transition: background 0.3s, border-color 0.3s; }
+        .threat-status-block { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+        .threat-status-dot { width: 6px; height: 6px; border-radius: 50%; background-color: transparent; transition: background-color 0.3s; }
+        .analysis-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 10px; padding: 14px; height: calc(100% - 37px); box-sizing: border-box; }
+        .analysis-cell { background-color: var(--bg-hover); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; display: flex; flex-direction: column; justify-content: space-between; min-height: 0; transition: background-color 0.3s, border-color 0.3s; }
+        .cell-info { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-main); font-size: 10px; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+        .cell-value { display: inline-flex; align-items: center; }
+        .mono-num { font-family: monospace; font-size: 11px; font-weight: 500; color: var(--text-primary); }
+        .sans-pct { font-family: var(--font-main); font-size: 10px; font-weight: 500; color: var(--text-secondary); margin-left: 1px; }
+        .cell-graph-container { flex: 1; width: 100%; position: relative; margin-top: 6px; min-height: 0; overflow: hidden; }
+        .cell-graph { position: absolute; top: 0; left: 0; height: 100%; display: block; transform-origin: left top; will-change: transform; }
+        .panel-viewport { flex: 1; position: relative; background-color: var(--bg-subtle); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; transition: background 0.3s, border-color 0.3s; }
+        #canvas-container { flex: 1; width: 100%; height: 100%; outline: none; transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1); will-change: opacity; }
+        #canvas-container.dimmed { opacity: 0.15; pointer-events: none; }
+        .viewport-controls { position: absolute; bottom: 24px; left: 24px; background-color: var(--bg-translucent); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); display: flex; gap: 10px; z-index: 10; transition: background-color 0.3s, border-color 0.3s; }
+        .viewport-btn { background-color: var(--bg-main); border: 1px solid var(--btn-border); color: var(--text-primary); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500; transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease; display: inline-flex; align-items: center; gap: 6px; }
+        .viewport-btn:hover { background-color: var(--bg-hover); }
+        .viewport-btn.active { background-color: var(--primary); border-color: var(--primary); color: var(--primary-text); }
+        .icon-btn { padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+        .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .icon-btn svg { width: 16px; height: 16px; stroke-width: 1.75; }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo-section"><h1>VeraSight</h1></div>
+        <div class="metrics-bar">
+            <div class="metric-pill status-pill"><div class="status-dot" id="status-dot"></div><span id="status-txt">Offline</span></div>
+            <div class="metric-pill">FPS: <span id="metric-fps" class="mono-num">--</span></div>
+            <div class="metric-pill">Data: <span id="metric-rate" class="mono-num">--</span><span class="unit-txt">KB/s</span></div>
+            <div class="metric-pill">Device IP: <span id="metric-ip" class="mono-num">N/A</span></div>
+            <button class="icon-btn" id="themeToggleBtn" title="Theme">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <div class="sidebar">
+            <div class="panel-blend">
+                <div class="panel-header" style="flex-shrink: 0;">Blend shapes</div>
+                <div class="blend-list" id="blend-container"></div>
+            </div>
+
+            <div class="panel-static-analysis">
+                <div class="panel-header" style="border-bottom: 1px solid var(--border); background-color: var(--bg-subtle); display: flex; justify-content: space-between; align-items: center;">
+                    <span>Static analysis</span>
+                    <div class="threat-status-block"><span class="threat-status-dot" id="threat-dot-indicator"></span><span id="threat-lbl-indicator">--</span></div>
+                </div>
+                <div class="analysis-grid">
+                    <div class="analysis-cell"><div class="cell-info"><span>ASV</span><span class="cell-value" id="val-asv"><span class="mono-num">--</span><span class="sans-pct">%</span></span></div><div class="cell-graph-container"><canvas class="cell-graph" id="graph-asv"></canvas></div></div>
+                    <div class="analysis-cell"><div class="cell-info"><span>SMT</span><span class="cell-value" id="val-smt"><span class="mono-num">--</span><span class="sans-pct">%</span></span></div><div class="cell-graph-container"><canvas class="cell-graph" id="graph-smt"></canvas></div></div>
+                    <div class="analysis-cell"><div class="cell-info"><span>OSD</span><span class="cell-value" id="val-osd"><span class="mono-num">--</span><span class="sans-pct">%</span></span></div><div class="cell-graph-container"><canvas class="cell-graph" id="graph-osd"></canvas></div></div>
+                    <div class="analysis-cell"><div class="cell-info"><span>ASI</span><span class="cell-value" id="val-asi"><span class="mono-num">--</span><span class="sans-pct">%</span></span></div><div class="cell-graph-container"><canvas class="cell-graph" id="graph-asi"></canvas></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-viewport">
+            <div id="canvas-container"></div>
+            <div class="viewport-controls">
+                <button class="viewport-btn active" id="btn-lock">Lock Head Rotation</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const BLENDSHAPE_NAMES = [
+            "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft", "browOuterUpRight", "cheekPuff", "cheekSquintLeft", "cheekSquintRight", "eyeBlinkLeft", "eyeBlinkRight", "eyeLookDownLeft", "eyeLookDownRight", "eyeLookInLeft", "eyeLookInRight", "eyeLookOutLeft", "eyeLookOutRight", "eyeLookUpLeft", "eyeLookUpRight", "eyeSquintLeft", "eyeSquintRight", "eyeWideLeft", "eyeWideRight", "jawForward", "jawLeft", "jawOpen", "jawRight", "mouthClose", "mouthDimpleLeft", "mouthDimpleRight", "mouthFrownLeft", "mouthFrownRight", "mouthFunnel", "mouthLeft", "mouthLowerDownLeft", "mouthLowerDownRight", "mouthPressLeft", "mouthPressRight", "mouthPucker", "mouthRight", "mouthRollLower", "mouthRollUpper", "mouthShrugLower", "mouthShrugUpper", "mouthSmileLeft", "mouthSmileRight", "mouthStretchLeft", "mouthStretchRight", "mouthUpperUpLeft", "mouthUpperUpRight", "noseSneerLeft", "noseSneerRight", "tongueOut"
+        ];
+
+        // 1. Initialize Blend Shapes UI
+        const blendContainer = document.getElementById('blend-container');
+        const domRows = [];
+        
+        const rankObjects = Array.from({ length: 52 }, (_, i) => ({ idx: i, val: 0 }));
+        const sortedRanks = [...rankObjects];
+
+        for (let i = 0; i < 52; i++) {
+            const row = document.createElement('div'); row.className = 'blend-row';
+            const nameLabel = document.createElement('div'); nameLabel.className = 'blend-name';
+            nameLabel.textContent = BLENDSHAPE_NAMES[i];
+            
+            const container = document.createElement('div'); container.className = 'blend-bar-container';
+            const fill = document.createElement('div'); fill.className = 'blend-bar-fill';
+            const valLabel = document.createElement('div'); valLabel.className = 'blend-val';
+            valLabel.textContent = '0.00';
+
+            container.appendChild(fill); row.appendChild(nameLabel); row.appendChild(container); row.appendChild(valLabel);
+            blendContainer.appendChild(row);
+            
+            domRows.push({
+                row,
+                nameLabel,
+                fill,
+                valLabel,
+                lastLabel: BLENDSHAPE_NAMES[i],
+                lastScale: 0,
+                lastStr: '0.00'
+            });
+        }
+
+        function updateTextNode(el, text) { if (el.textContent !== text) el.textContent = text; }
+
+        // 2. Global State Variables
+        let lastFrameCount = 0; let lastBytesReceived = 0; let lastSampleTime = performance.now(); let currentUiState = "Initial";
+        const uiElements = {
+            statusDot: document.getElementById('status-dot'), statusTxt: document.getElementById('status-txt'),
+            fps: document.getElementById('metric-fps'), rate: document.getElementById('metric-rate'), ip: document.getElementById('metric-ip'),
+            btnLock: document.getElementById('btn-lock'), canvasContainer: document.getElementById('canvas-container'), blendList: document.getElementById('blend-container')
+        };
+
+        const GRAPH_HISTORY_MAX = 40;
+        const analysisMetrics = {
+            asv: { val: 0, history: Array(GRAPH_HISTORY_MAX).fill(0), canvas: document.getElementById('graph-asv'), ctx: document.getElementById('graph-asv').getContext('2d'), uiMono: document.querySelector('#val-asv .mono-num'), lastStr: '' },
+            smt: { val: 0, history: Array(GRAPH_HISTORY_MAX).fill(0), canvas: document.getElementById('graph-smt'), ctx: document.getElementById('graph-smt').getContext('2d'), uiMono: document.querySelector('#val-smt .mono-num'), lastStr: '' },
+            osd: { val: 0, history: Array(GRAPH_HISTORY_MAX).fill(0), canvas: document.getElementById('graph-osd'), ctx: document.getElementById('graph-osd').getContext('2d'), uiMono: document.querySelector('#val-osd .mono-num'), lastStr: '' },
+            asi: { val: 0, history: Array(GRAPH_HISTORY_MAX).fill(0), canvas: document.getElementById('graph-asi'), ctx: document.getElementById('graph-asi').getContext('2d'), uiMono: document.querySelector('#val-asi .mono-num'), lastStr: '' }
+        };
+
+        const targetShapes = new Float32Array(52);
+        let lastRenderVt = null;
+        let lastRenderLa = new Float32Array(3);
+
+        // 3. Three.js Core Setup (POWER OPTIMIZED FOR INTEGRATED GPUS)
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.05, 10.0);
+        camera.position.set(0, 0, 0.4);
+
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: false,
+            alpha: true, 
+            powerPreference: "low-power",
+            precision: "mediump",
+            stencil: false,
+            depth: true
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.1; controls.maxDistance = 1.5; controls.minDistance = 0.15;
+
+        const trackerGroup = new THREE.Group();
+        scene.add(trackerGroup);
+
+        const faceMaterial = new THREE.ShaderMaterial({
+            uniforms: { uMinZ: { value: -0.10 }, uMaxZ: { value: 0.05 }, uPointSize: { value: 3.5 * (Math.min(window.devicePixelRatio, 1.5)) } },
+            vertexShader: `uniform float uMinZ; uniform float uMaxZ; uniform float uPointSize; varying vec4 vColor; void main() { vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition; gl_PointSize = uPointSize; float intensity = clamp((position.z - uMinZ) / (uMaxZ - uMinZ), 0.0, 1.0); vColor = vec4(intensity * 0.12, intensity * 0.68, intensity * 1.0, 1.0); }`,
+            fragmentShader: `varying vec4 vColor; void main() { if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard; gl_FragColor = vColor; }`,
+            transparent: true, depthWrite: false
+        });
+
+        const maxVertices = 1220;
+        const faceGeometry = new THREE.BufferGeometry();
+        faceGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(maxVertices * 3), 3));
+        trackerGroup.add(new THREE.Points(faceGeometry, faceMaterial));
+
+        const gazeGeometry = new THREE.BufferGeometry();
+        gazeGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(18), 3));
+        trackerGroup.add(new THREE.LineSegments(gazeGeometry, new THREE.LineBasicMaterial({ color: 0xff6b00, linewidth: 2 })));
+
+        const pupilGeometry = new THREE.BufferGeometry();
+        pupilGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+        trackerGroup.add(new THREE.Points(pupilGeometry, new THREE.PointsMaterial({ color: 0xff6b00, size: 6.0, sizeAttenuation: false })));
+
+        const facePosArr = faceGeometry.attributes.position.array;
+        const gazePosArr = gazeGeometry.attributes.position.array;
+        const pupilPosArr = pupilGeometry.attributes.position.array;
+
+        // 4. Timing & Performance Limiter State Variables
+        const interpState = { prevHtQuat: new THREE.Quaternion(), targetHtQuat: new THREE.Quaternion(), currentHtQuat: new THREE.Quaternion(), lastTickTime: performance.now(), tickInterval: 50 };
+        let activeFrameMeta = null; let lockRotation = true; let isConnected = false; let lastFrameTime = 0;
+        let animFrameId = null; let forceDraw = false; let last10HzTime = performance.now(); let newFrameArrived = false;
+
+        let lastRenderTime = 0;
+        const RENDER_INTERVAL = 25; // Limit viewport updates to ~40 FPS to prevent high GPU usage on high-refresh-rate monitors
+
+        // 5. Shared Canvas Layout Style Cache
+        const graphCache = { w: 0, h: 0, step: 0, stepCss: 0, padding: 0, activeHeight: 0, primary: '', stroke: null, fill: null, dpr: 1 };
+        function updateGraphStyles() {
+            const canvas = analysisMetrics.asv.canvas;
+            const parentRect = canvas.parentElement.getBoundingClientRect();
+            const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+            
+            const containerW = parentRect.width;
+            const containerH = parentRect.height;
+            const step = containerW / (GRAPH_HISTORY_MAX - 1);
+            const canvasW = containerW + step;
+
+            const w = canvasW * dpr; 
+            const h = containerH * dpr; 
+            const style = getComputedStyle(document.documentElement);
+            const primary = style.getPropertyValue('--primary').trim() || '#2d2d2d';
+
+            if (graphCache.w !== w || graphCache.h !== h || graphCache.primary !== primary) {
+                graphCache.w = w; graphCache.h = h; graphCache.primary = primary; graphCache.padding = 4 * dpr;
+                graphCache.activeHeight = h - graphCache.padding * 2; 
+                graphCache.step = step * dpr; 
+                graphCache.stepCss = step; 
+                graphCache.dpr = dpr;
+
+                Object.keys(analysisMetrics).forEach(key => { 
+                    const cvs = analysisMetrics[key].canvas; 
+                    cvs.style.width = canvasW + 'px';
+                    cvs.style.height = containerH + 'px';
+                    cvs.width = w; 
+                    cvs.height = h; 
+                });
+                if (h > 0) {
+                    const ctx = analysisMetrics.asv.ctx;
+                    const gradStroke = ctx.createLinearGradient(0, graphCache.padding, 0, h - graphCache.padding);
+                    gradStroke.addColorStop(0, primary); gradStroke.addColorStop(1, primary + '10'); graphCache.stroke = gradStroke;
+                    const gradFill = ctx.createLinearGradient(0, graphCache.padding, 0, h - graphCache.padding);
+                    gradFill.addColorStop(0, primary + '25'); gradFill.addColorStop(1, 'transparent'); graphCache.fill = gradFill;
+                }
+            }
+        }
+
+        // Restores camera and controls orientation straight down the center line
+        function resetCameraAndControls() {
+            camera.position.set(0, 0, 0.4);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            triggerRenderWakeup();
+        }
+
+        // 6. Direct SSE Data Ingestion (Massive CPU saving by bypassing 60fps array loops)
+        function commitFrameAsTarget(frame) {
+            if (frame.meta) {
+                activeFrameMeta = frame.meta;
+                isConnected = frame.meta.connected;
+            } else {
+                isConnected = false;
+            }
+
+            // Update frame states and metrics only when a verified payload exists
+            if (isConnected && frame.sh) {
+                lastFrameTime = performance.now();
+                
+                if (frame.vt) {
+                    facePosArr.set(frame.vt.slice(0, Math.min(frame.vt.length, maxVertices * 3)));
+                    faceGeometry.attributes.position.needsUpdate = true;
+                }
+                if (frame.le && frame.re && frame.la) {
+                    const le = frame.le, re = frame.re, la = frame.la;
+                    gazePosArr[0]=le[12]; gazePosArr[1]=le[13]; gazePosArr[2]=le[14]; gazePosArr[3]=la[0]; gazePosArr[4]=la[1]; gazePosArr[5]=la[2];
+                    gazePosArr[6]=re[12]; gazePosArr[7]=re[13]; gazePosArr[8]=re[14]; gazePosArr[9]=la[0]; gazePosArr[10]=la[1]; gazePosArr[11]=la[2];
+                    gazePosArr[12]=le[12]; gazePosArr[13]=le[13]; gazePosArr[14]=le[14]; gazePosArr[15]=re[12]; gazePosArr[16]=re[13]; gazePosArr[17]=re[14];
+                    pupilPosArr[0]=le[12]; pupilPosArr[1]=le[13]; pupilPosArr[2]=le[14]; pupilPosArr[3]=re[12]; pupilPosArr[4]=re[13]; pupilPosArr[5]=re[14];
+                    gazeGeometry.attributes.position.needsUpdate = true; pupilGeometry.attributes.position.needsUpdate = true;
+                    lastRenderLa.set(la);
+                }
+                if (frame.ht && lockRotation) {
+                    interpState.prevHtQuat.copy(interpState.currentHtQuat);
+                    const m = new THREE.Matrix4().fromArray(frame.ht); m.setPosition(0, 0, 0);
+                    interpState.targetHtQuat.setFromRotationMatrix(m);
+                    interpState.lastTickTime = performance.now();
+                } else { interpState.targetHtQuat.set(0, 0, 0, 1); }
+
+                targetShapes.set(frame.sh);
+                newFrameArrived = true;
+            }
+
+            triggerRenderWakeup();
+        }
+
+        // 7. Viewport-Culled Render Loop (GPU composited translations)
+        const LIST_PADDING_TOP = 12;
+        const ROW_HEIGHT = 32;
+        const OVERSCAN_ROWS = 4;
+
+        function updateBlendShapesUI() {
+            const scrollTop = Math.max(0, blendContainer.scrollTop - LIST_PADDING_TOP);
+            const containerHeight = blendContainer.clientHeight;
+            
+            const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN_ROWS);
+            const endIndex = Math.min(51, Math.ceil((scrollTop + containerHeight) / ROW_HEIGHT) + OVERSCAN_ROWS);
+
+            for (let i = 0; i < 52; i++) {
+                const nodes = domRows[i];
+                if (i >= startIndex && i <= endIndex) {
+                    const item = sortedRanks[i];
+                    const name = BLENDSHAPE_NAMES[item.idx];
+                    const val = item.val;
+
+                    if (nodes.lastLabel !== name) {
+                        nodes.nameLabel.textContent = name;
+                        nodes.lastLabel = name;
+                    }
+                    if (Math.abs(nodes.lastScale - val) > 0.001) {
+                        nodes.fill.style.transform = `scale3d(${val}, 1, 1)`;
+                        nodes.lastScale = val;
+                    }
+                    const strVal = val.toFixed(2);
+                    if (nodes.lastStr !== strVal) {
+                        nodes.valLabel.textContent = strVal;
+                        nodes.lastStr = strVal;
+                    }
+                }
+            }
+        }
+
+        // 8. Decoupled 10Hz Computations - Interrogation Psychology & Behavioral Criminology Metrics
+        function execute10HzTasks() {
+            const mapShape = (name) => targetShapes[BLENDSHAPE_NAMES.indexOf(name)] || 0;
+
+            // ASV: Autonomic Stress Vector
+            const fearAppraisal = mapShape('browInnerUp') + (mapShape('eyeWideLeft') + mapShape('eyeWideRight')) / 2;
+            const hostilityRepression = ((mapShape('browDownLeft') + mapShape('browDownRight')) / 2 + 
+                                         (mapShape('noseSneerLeft') + mapShape('noseSneerRight')) / 2 + 
+                                         (mapShape('mouthPressLeft') + mapShape('mouthPressRight')) / 2 +
+                                         (mapShape('mouthFrownLeft') + mapShape('mouthFrownRight')) / 2);
+            const liveASV = Math.min(Math.max((fearAppraisal * 0.4 + hostilityRepression * 0.6) * 150, 0), 100);
+
+            // SMT: Somatic Movement Tracker
+            let liveSMT = 0;
+            if (lastRenderVt) {
+                let displacement = 0, sampleCount = 0;
+                for (let i = 0; i < maxVertices * 3; i += 72) {
+                    const dx = facePosArr[i] - lastRenderVt[i];
+                    const dy = facePosArr[i+1] - lastRenderVt[i+1];
+                    const dz = facePosArr[i+2] - lastRenderVt[i+2];
+                    displacement += Math.sqrt(dx*dx + dy*dy + dz*dz); 
+                    sampleCount++;
+                }
+                if (sampleCount > 0) {
+                    const meanDisp = displacement / sampleCount;
+                    const jitter = (meanDisp > 0.00002 && meanDisp < 0.004) ? meanDisp : 0;
+                    liveSMT = Math.min(Math.max(jitter * 20000, 0), 100);
+                }
+            }
+            if (!lastRenderVt) lastRenderVt = new Float32Array(maxVertices * 3);
+            lastRenderVt.set(facePosArr);
+
+            // OSD: Ocular Signatures of Deception
+            const dx = lastRenderLa[0], dy = lastRenderLa[1], dz = lastRenderLa[2];
+            const gazeMagnitude = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            const lateralAversion = (mapShape('eyeLookDownLeft') + mapShape('eyeLookDownRight') + 
+                                     mapShape('eyeLookOutLeft') + mapShape('eyeLookInRight')) / 4;
+            const ocularTension = (mapShape('eyeSquintLeft') + mapShape('eyeSquintRight')) / 2;
+            const liveOSD = Math.min(Math.max((gazeMagnitude * 1000) + (lateralAversion * 50) + (ocularTension * 30), 0), 100);
+
+            // ASI: Asymmetry Index
+            const asymmetricPairs = [
+                ['browDownLeft','browDownRight'], ['browOuterUpLeft','browOuterUpRight'], ['cheekSquintLeft','cheekSquintRight'],
+                ['eyeSquintLeft','eyeSquintRight'], ['eyeBlinkLeft','eyeBlinkRight'], ['mouthSmileLeft','mouthSmileRight'],
+                ['mouthDimpleLeft','mouthDimpleRight'], ['mouthPressLeft','mouthPressRight'], ['mouthUpperUpLeft','mouthUpperUpRight']
+            ];
+            let sumAsymmetry = 0, validPairs = 0;
+            asymmetricPairs.forEach(pair => {
+                const vL = mapShape(pair[0]), vR = mapShape(pair[1]), sum = vL + vR;
+                if (sum > 0.04) { sumAsymmetry += Math.abs(vL - vR) / sum; validPairs++; }
+            });
+            const liveASI = validPairs > 0 ? Math.min((sumAsymmetry / validPairs) * 100, 100) : 0;
+
+            analysisMetrics.asv.val = analysisMetrics.asv.val * 0.9 + liveASV * 0.1;
+            analysisMetrics.smt.val = analysisMetrics.smt.val * 0.8 + liveSMT * 0.2;
+            analysisMetrics.osd.val = analysisMetrics.osd.val * 0.8 + liveOSD * 0.2;
+            analysisMetrics.asi.val = analysisMetrics.asi.val * 0.9 + liveASI * 0.1;
+
+            Object.keys(analysisMetrics).forEach(key => {
+                const metric = analysisMetrics[key]; metric.history.push(metric.val);
+                if (metric.history.length > GRAPH_HISTORY_MAX) metric.history.shift();
+                const strVal = metric.val.toFixed(1); if (metric.lastStr !== strVal) { metric.uiMono.textContent = strVal; metric.lastStr = strVal; }
+            });
+
+            drawSparklinesStatic();
+            updateUnifiedRiskIndicator((analysisMetrics.asv.val * 0.35) + (analysisMetrics.smt.val * 0.25) + (analysisMetrics.osd.val * 0.20) + (analysisMetrics.asi.val * 0.20));
+
+            for (let i = 0; i < 52; i++) rankObjects[i].val = targetShapes[i];
+            sortedRanks.sort((a, b) => b.val - a.val);
+
+            updateBlendShapesUI();
+        }
+
+        // 9. Static Redraw (Only runs 10 times a second at 10Hz)
+        function drawSparklinesStatic() {
+            if (graphCache.w === 0) updateGraphStyles();
+            Object.keys(analysisMetrics).forEach(key => {
+                const metric = analysisMetrics[key]; const ctx = metric.ctx; if (!ctx) return;
+                ctx.clearRect(0, 0, graphCache.w, graphCache.h);
+                if (currentUiState === "Offline" || metric.history.length < 2) return;
+                ctx.strokeStyle = graphCache.stroke; ctx.fillStyle = graphCache.fill; ctx.lineWidth = 1.5 * graphCache.dpr;
+                ctx.beginPath();
+                
+                for (let i = 0; i < metric.history.length; i++) {
+                    const x = i * graphCache.step;
+                    const y = graphCache.h - graphCache.padding - (metric.history[i] / 100) * graphCache.activeHeight;
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                
+                const nextX = GRAPH_HISTORY_MAX * graphCache.step;
+                const nextY = graphCache.h - graphCache.padding - (metric.val / 100) * graphCache.activeHeight;
+                ctx.lineTo(nextX, nextY);
+
+                ctx.stroke();
+                
+                ctx.lineTo(nextX, graphCache.h);
+                ctx.lineTo(0, graphCache.h);
+                ctx.closePath();
+                ctx.fill();
+            });
+        }
+
+        let lastRiskScoreStr = ''; let lastRiskColor = '';
+        function updateUnifiedRiskIndicator(score) {
+            const dot = document.getElementById('threat-dot-indicator'), lbl = document.getElementById('threat-lbl-indicator');
+            if (currentUiState === "Offline") {
+                if (lastRiskScoreStr !== '--') { dot.style.backgroundColor = "transparent"; updateTextNode(lbl, "--"); lbl.style.color = "var(--text-secondary)"; lastRiskScoreStr = '--'; lastRiskColor = 'transparent'; }
+                return;
+            }
+            let color = "var(--disabled)", statusText = "Stable";
+            if (score < 15) { statusText = "Stable"; color = "var(--status-green)"; } else if (score < 40) { statusText = "Elevated"; color = "var(--status-yellow)"; } else if (score < 70) { statusText = "Distressed"; color = "var(--gaze-orange)"; } else { statusText = "Critical"; color = "var(--status-red)"; }
+            const newScoreStr = `${statusText} (${Math.round(score)}%)`;
+            if (lastRiskColor !== color) { dot.style.backgroundColor = color; lbl.style.color = color; lastRiskColor = color; }
+            if (lastRiskScoreStr !== newScoreStr) { updateTextNode(lbl, newScoreStr); lastRiskScoreStr = newScoreStr; }
+        }
+
+        // 10. Master Timing Controller (Decoupled & Frame-Rate Capped Render Loop)
+        function animationFrameLoop() {
+            animFrameId = null; 
+            const now = performance.now(); 
+            let needsNextFrame = false; 
+            let needs3DRender = false;
+            
+            const timeSinceLastData = now - lastFrameTime;
+            const is_active = (timeSinceLastData < 1500) && isConnected;
+
+            let targetUiState = "Offline";
+            if (isConnected) {
+                if (is_active) {
+                    targetUiState = "Active";
+                } else {
+                    targetUiState = "Idle";
+                }
+            } else {
+                targetUiState = "Offline";
+            }
+
+            // Clean state management transitions matching receiver.py state logic
+            if (currentUiState !== targetUiState) {
+                currentUiState = targetUiState;
+                if (currentUiState === "Offline") {
+                    uiElements.statusDot.style.backgroundColor = "var(--status-red)"; 
+                    updateTextNode(uiElements.statusTxt, "Offline");
+                    uiElements.canvasContainer.classList.add('dimmed'); 
+                    uiElements.blendList.classList.add('dimmed');
+                    updateTextNode(uiElements.fps, "--"); 
+                    updateTextNode(uiElements.rate, "--"); 
+                    updateTextNode(uiElements.ip, "N/A"); 
+                    
+                    // Flush graphs and visual layers back to safe default resting positions
+                    Object.keys(analysisMetrics).forEach(key => {
+                        analysisMetrics[key].val = 0;
+                        analysisMetrics[key].history.fill(0);
+                        analysisMetrics[key].lastStr = '';
+                        analysisMetrics[key].uiMono.textContent = '--';
+                        analysisMetrics[key].canvas.style.transform = `translate3d(0px, 0, 0)`;
+                    });
+                    drawSparklinesStatic();
+                    updateUnifiedRiskIndicator(0);
+                    
+                    resetCameraAndControls();
+                    forceDraw = true;
+                } else if (currentUiState === "Idle") {
+                    uiElements.statusDot.style.backgroundColor = "var(--status-yellow)"; 
+                    updateTextNode(uiElements.statusTxt, "Idle");
+                    uiElements.canvasContainer.classList.add('dimmed'); 
+                    uiElements.blendList.classList.add('dimmed');
+                    updateTextNode(uiElements.fps, "0"); 
+                    updateTextNode(uiElements.rate, "0.0"); 
+                    
+                    Object.keys(analysisMetrics).forEach(key => {
+                        analysisMetrics[key].val = 0;
+                        analysisMetrics[key].lastStr = '';
+                        analysisMetrics[key].uiMono.textContent = '0.0';
+                        analysisMetrics[key].canvas.style.transform = `translate3d(0px, 0, 0)`;
+                    });
+                    updateUnifiedRiskIndicator(0);
+                    
+                    resetCameraAndControls();
+                    forceDraw = true;
+                } else if (currentUiState === "Active") {
+                    uiElements.statusDot.style.backgroundColor = "var(--status-green)"; 
+                    updateTextNode(uiElements.statusTxt, "Active");
+                    uiElements.canvasContainer.classList.remove('dimmed'); 
+                    uiElements.blendList.classList.remove('dimmed');
+                }
+            }
+
+            if (currentUiState === "Active") {
+                needsNextFrame = true;
+
+                // Drift-free loop calculation pass
+                if (now - last10HzTime >= 100) {
+                    execute10HzTasks(); 
+                    if (now - last10HzTime > 1000) {
+                        last10HzTime = now;
+                    } else {
+                        last10HzTime += 100;
+                    }
+                    needs3DRender = true;
+                }
+
+                // Smooth, continuous CSS translations using sub-frame interpolation offsets
+                const dt = Math.max(0, Math.min((now - last10HzTime) / 100, 1.0));
+                const shiftCss = dt * graphCache.stepCss;
+                Object.keys(analysisMetrics).forEach(key => {
+                    analysisMetrics[key].canvas.style.transform = `translate3d(${-shiftCss}px, 0, 0)`;
+                });
+
+                if (lockRotation) {
+                    const alpha = Math.min((now - interpState.lastTickTime) / interpState.tickInterval, 1.0);
+                    if (alpha < 1.0) {
+                        THREE.Quaternion.slerp(interpState.prevHtQuat, interpState.targetHtQuat, interpState.currentHtQuat, alpha);
+                        trackerGroup.quaternion.copy(interpState.currentHtQuat);
+                        needs3DRender = true;
+                    } else {
+                        trackerGroup.quaternion.copy(interpState.targetHtQuat);
+                    }
+                } else { 
+                    if (!trackerGroup.quaternion.equals(new THREE.Quaternion(0, 0, 0, 1))) {
+                        trackerGroup.quaternion.set(0, 0, 0, 1); 
+                        needs3DRender = true;
+                    }
+                }
+
+                if (newFrameArrived) {
+                    needs3DRender = true;
+                    newFrameArrived = false;
+                }
+
+                const delta = (now - lastSampleTime) / 1000.0;
+                if (delta >= 1.0 && activeFrameMeta) {
+                    updateTextNode(uiElements.fps, String(Math.round((activeFrameMeta.frames - lastFrameCount) / delta)));
+                    updateTextNode(uiElements.rate, ((activeFrameMeta.bytes_received - lastBytesReceived) / 1024.0 / delta).toFixed(1));
+                    updateTextNode(uiElements.ip, activeFrameMeta.ip);
+                    lastFrameCount = activeFrameMeta.frames; lastBytesReceived = activeFrameMeta.bytes_received; lastSampleTime = now;
+                }
+            }
+
+            if (controls.update()) {
+                needs3DRender = true;
+            }
+            
+            if (needs3DRender) {
+                needsNextFrame = true;
+            }
+
+            if (needs3DRender || forceDraw) { 
+                const timeSinceLastRender = now - lastRenderTime;
+                if (timeSinceLastRender >= RENDER_INTERVAL || forceDraw) {
+                    renderer.render(scene, camera); 
+                    lastRenderTime = now;
+                    forceDraw = false; 
+                } else {
+                    needsNextFrame = true;
+                }
+            }
+            
+            if (needsNextFrame || forceDraw) { 
+                if (animFrameId === null) {
+                    animFrameId = requestAnimationFrame(animationFrameLoop); 
+                }
+            }
+        }
+
+        const eventSource = new EventSource("/stream");
+        eventSource.onmessage = (event) => commitFrameAsTarget(JSON.parse(event.data));
+        eventSource.onerror = () => { isConnected = false; triggerRenderWakeup(); };
+
+        function triggerRenderWakeup() { 
+            forceDraw = true; 
+            if (animFrameId === null) { 
+                animFrameId = requestAnimationFrame(animationFrameLoop); 
+            } 
+        }
+        
+        uiElements.btnLock.addEventListener('click', () => { 
+            lockRotation = !lockRotation; 
+            uiElements.btnLock.classList.toggle('active', lockRotation); 
+            if (!lockRotation) {
+                trackerGroup.rotation.set(0, 0, 0); 
+            }
+            resetCameraAndControls();
+            triggerRenderWakeup(); 
+        });
+        
+        blendContainer.addEventListener('scroll', updateBlendShapesUI, { passive: true });
+        
+        controls.addEventListener('change', triggerRenderWakeup);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) triggerRenderWakeup(); });
+        window.addEventListener('resize', () => { 
+            camera.aspect = container.clientWidth / container.clientHeight; 
+            camera.updateProjectionMatrix(); 
+            renderer.setSize(container.clientWidth, container.clientHeight); 
+            updateGraphStyles(); 
+            drawSparklinesStatic(); 
+            updateBlendShapesUI();
+            triggerRenderWakeup(); 
+        });
+
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        function toggleTheme() { document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); requestAnimationFrame(() => { updateGraphStyles(); drawSparklinesStatic(); triggerRenderWakeup(); }); }
+        themeToggleBtn.addEventListener('click', toggleTheme);
+        if (window.matchMedia) { if (window.matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-theme', 'dark'); window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => { document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light'); requestAnimationFrame(() => { updateGraphStyles(); drawSparklinesStatic(); triggerRenderWakeup(); }); }); }
+        updateGraphStyles(); drawSparklinesStatic(); triggerRenderWakeup();
+    </script>
+</body>
+</html>
