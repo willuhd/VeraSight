@@ -81,7 +81,7 @@ def tcp_receiver():
                 connection_status["frames"] += 1
                 
                 magic = payload[0:4]
-                if magic != b'VSBP':
+                if magic != b'VSIR':
                     continue
                 
                 try:

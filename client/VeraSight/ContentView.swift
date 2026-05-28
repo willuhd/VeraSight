@@ -588,7 +588,7 @@ class VSCap: NSObject, ObservableObject, ARSessionDelegate {
         flatVertices.withUnsafeBytes { rawPayload.append(contentsOf: $0) }
 
         var finalPacket = Data()
-        finalPacket.append(contentsOf: [0x56, 0x53, 0x42, 0x50])
+        finalPacket.append(contentsOf: [0x56, 0x53, 0x49, 0x52]) // VSIR
         
         do {
             if let compressed = try (rawPayload as NSData).compressed(using: .zlib) as Data? {
