@@ -80,7 +80,7 @@ This paper presents VeraSight, an integrated, real-time sensing and deep learnin
 
 \section{Introduction}
 
-Behavioral studies indicate that physiological stress, high cognitive load, and shifts in emotional states often manifest through involuntary facial micromovements. These brief, transient expressions serve as valuable signals in high-stakes or performance-driven scenarios. For instance, in public speaking or competitive debates, monitoring micro-expressions can help speakers manage anxiety and improve delivery. Similarly, in professional esports or competitive gaming, high-frequency facial telemetry can assist in evaluating a player's stress levels and cognitive workload under pressure. 
+Behavioral studies indicate that physiological stress, high cognitive load, and shifts in emotional states often manifest through involuntary facial micromovements \cite{porter2008reading}. These brief, transient expressions serve as valuable signals in high-stakes or performance-driven scenarios \cite{matsumoto2018microexpressions}. For instance, in public speaking or competitive debates, monitoring micro-expressions can help speakers manage anxiety and improve delivery. Similarly, in professional esports or competitive gaming, high-frequency facial telemetry can assist in evaluating a player's stress levels and cognitive workload under pressure. 
 
 Detecting and logging these fast ocular and muscular changes in real time remains a challenge. Conventional physical biometrics, such as skin conductance sensors or heart rate monitors, require direct contact, which can disrupt natural behavior. Alternatively, post-session video analysis introduces significant feedback latency. Commodity depth-sensing hardware, such as time-of-flight and structured-light TrueDepth sensors, offers a non-contact alternative. However, streaming and processing high-frequency 3D point clouds introduces substantial network, computational, and modeling overhead.
 
@@ -202,7 +202,7 @@ $$\mathcal{L}_{\text{VAE}}(\theta, \phi; \mathbf{x}) = \frac{1}{N} \sum_{i=1}^{N
 where we set $\beta = 0.1$. During real-time inference, the decoder is bypassed, and the mean vector $\boldsymbol{\mu} \in \mathbb{R}^{16}$ is used directly as the latent feature state $\mathbf{z}$, keeping latent inference latency under $0.3\text{ ms}$ on mobile GPUs.
 
 \subsection{Anatomically-Weighted Isolation Forests}
-Rather than relying on pre-trained supervised classifiers that may struggle to generalize to individual expressive habits, VeraSight utilizes an online, subject-specific **Anatomically-Weighted Isolation Forest (AW-iForest)**. Behavioral studies suggest that involuntary stress responses often present as brief, localized, or asymmetrical muscle contractions, particularly in the upper face (such as the brow and forehead area) and specific lower-facial expressions. 
+Rather than relying on pre-trained supervised classifiers that may struggle to generalize to individual expressive habits, VeraSight utilizes an online, subject-specific **Anatomically-Weighted Isolation Forest (AW-iForest)**. Behavioral studies suggest that involuntary stress responses often present as brief, localized, or asymmetrical muscle contractions, particularly in the upper face (such as the brow and forehead area) and specific lower-facial expressions \cite{porter2012secrets, vitale2021facial}.
 
 To capture these dynamics, the system calculates temporal differences across logarithmic intervals relative to the current frame $t$:
 $$\mathbf{d}_{t, \tau} = \mathbf{b}_t - \mathbf{b}_{t-\tau} \quad \text{for } \tau \in \{1, 10, 100, 1000\}$$
@@ -291,7 +291,7 @@ In this paper, we presented VeraSight, an integrated, real-time sensing and deep
 
 Rather than relying on scarce and subjective labeled datasets or generalized offline classifiers, VeraSight employs an online, subject-specific Anatomically-Weighted Isolation Forest (AW-iForest) paired with a self-supervised predictive coding paradigm. This setup utilizes a weight-shared Siamese GRU to detect deviations from a subject's calibrated baseline. 
 
-Integrating a custom anatomically driven priority weight matrix preserves established indicators (such as muscular asymmetry and localized upper-facial leakage) during tree-splits, while a downstream logical reasoning layer provides contextual analysis. Experimental prototyping demonstrates that this multi-model approach offers an objective, non-invasive tool for behavioral assessment and feedback.
+Integrating a custom anatomically driven priority weight matrix preserves established indicators (such as muscular asymmetry and localized upper-facial leakage) during tree-splits \cite{porter2012secrets, vitale2021facial}, while a downstream logical reasoning layer provides contextual analysis. Experimental prototyping demonstrates that this multi-model approach offers an objective, non-invasive tool for behavioral assessment and feedback.
 
 \begin{acks}
 The authors agree to the following distribution of work: 
