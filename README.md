@@ -3,3 +3,5 @@
 #
 
 Real-time facial micromovement sensing and predictive behavioral inference analysis
+
+- Submission for the preliminary round (accepted to UbiComp): [here](essay/submission-r1.pdf)
