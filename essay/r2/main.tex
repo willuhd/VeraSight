@@ -2,6 +2,8 @@
 
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\usepackage{booktabs}
+\usepackage{multirow}
 
 \AtBeginDocument{%
   \providecommand\BibTeX{{%
@@ -18,7 +20,7 @@
 
 \begin{document}
 
-\title[VeraSight: Real-Time Facial Micromovement Sensing]{VeraSight: Real-Time Facial Micromovement Sensing and Predictive Behavioral Anomaly Detection}
+\title[VeraSight: Real-Time Facial Micromovement Sensing]{VeraSight: Real-Time Facial Micromovement Sensing and Personalized Behavioral Anomaly Detection}
 
 \author{William Quhao Chen}
 \affiliation{%
@@ -39,7 +41,7 @@
 \renewcommand{\shortauthors}{Chen and Huang}
 
 \begin{abstract}
-This paper presents VeraSight, an integrated, real-time sensing and deep learning pipeline designed to quantify and interpret facial micromovements across diverse applications, such as public speaking training, competitive gaming stress analysis, and behavioral interviews. Utilizing a commodity TrueDepth sensor at 60 frames per second, the system captures 3D facial keypoints and muscle activation blendshapes. To minimize wireless transmission overhead, we apply FP16 quantization and temporal zlib compression, reducing bandwidth requirements to under 300 KB/s. Spatial dimensions are compressed using a Variational Autoencoder, while an online, Anatomically-Weighted Isolation Forest (AW-iForest) extracts multi-scale temporal deltas to construct a personalized behavioral baseline. To prevent false positives from voluntary activities like speech or gameplay reactions, a Siamese Gated Recurrent Unit network forecasts abstract, high-level features rather than raw coordinates, flagging anomalies when observations deviate from dynamic predictions. Finally, a downstream analysis layer aggregates these metrics to provide context-aware feedback. Our implementation demonstrates a low-latency, non-invasive approach to mobile stress and behavioral monitoring.
+This paper presents VeraSight, an integrated, real-time sensing and deep learning pipeline designed to quantify and interpret facial micromovements for personalized behavioral anomaly detection across applications such as public speaking training, competitive gaming stress analysis, and behavioral coaching. Utilizing a commodity TrueDepth sensor at 60 frames per second, the system captures 3D facial keypoints and muscle activation blendshapes. To minimize wireless transmission overhead, we apply FP16 quantization and temporal zlib compression, reducing bandwidth requirements to under 300 KB/s. Spatial dimensions are compressed using a Variational Autoencoder trained on the BP4D+ dataset, while an online, Anatomically-Weighted Isolation Forest (AW-iForest) extracts multi-scale temporal deltas to construct a personalized behavioral baseline. To reduce false positives from voluntary activities like speech or gameplay reactions, a Siamese Gated Recurrent Unit network forecasts abstract, high-level features rather than raw coordinates, flagging anomalies when observations deviate from dynamic predictions. A downstream LLM analysis layer aggregates these metrics to provide context-aware feedback. We evaluate the pipeline through a controlled gaming study ($N=4$) correlating detected facial movement anomalies with in-game performance metrics (K/D ratio), demonstrating that the AW-iForest with GRU prediction more accurately correlates the stress vs. K/D ratio relationship compared to a standard Isolation Forest baseline. We emphasize that VeraSight detects \emph{personalized facial movement deviations} and is intended solely for voluntary self-reflection and coaching, not as a psychological assessment tool.
 \end{abstract}
 
 %%
@@ -80,17 +82,25 @@ This paper presents VeraSight, an integrated, real-time sensing and deep learnin
 
 \section{Introduction}
 
-Behavioral studies indicate that physiological stress, high cognitive load, and shifts in emotional states often manifest through involuntary facial micromovements \cite{porter2008reading}. These brief, transient expressions serve as valuable signals in high-stakes or performance-driven scenarios \cite{matsumoto2018microexpressions}. For instance, in public speaking or competitive debates, monitoring micro-expressions can help speakers manage anxiety and improve delivery. Similarly, in professional esports or competitive gaming, high-frequency facial telemetry can assist in evaluating a player's stress levels and cognitive workload under pressure. 
+Behavioral studies indicate that physiological stress, high cognitive load, and shifts in emotional states often co-occur with involuntary facial micromovements~\cite{porter2008reading}. These brief, transient expressions serve as potential signals in high-stakes or performance-driven scenarios~\cite{matsumoto2018microexpressions}. For instance, in public speaking or competitive debates, monitoring micro-expressions may help speakers manage anxiety and improve delivery. Similarly, in professional esports or competitive gaming, high-frequency facial telemetry may assist in evaluating a player's cognitive workload under pressure.
+
+We emphasize an important distinction: detecting \emph{unusual facial movements relative to a personalized baseline} is not equivalent to measuring physiological stress. A deviation from baseline may result from stress, but it may equally arise from speech, fatigue, head motion, tracking noise, deliberate expressions, or other contextual factors. Accordingly, we describe VeraSight's output as a \textbf{personalized facial movement anomaly score}---a metric indicating when a user's facial behavior deviates from their own calibrated norm---rather than a direct stress measurement. Validation against independent physiological measures (e.g., cortisol, heart rate variability) remains future work.
 
 Detecting and logging these fast ocular and muscular changes in real time remains a challenge. Conventional physical biometrics, such as skin conductance sensors or heart rate monitors, require direct contact, which can disrupt natural behavior. Alternatively, post-session video analysis introduces significant feedback latency. Commodity depth-sensing hardware, such as time-of-flight and structured-light TrueDepth sensors, offers a non-contact alternative. However, streaming and processing high-frequency 3D point clouds introduces substantial network, computational, and modeling overhead.
 
 To address these challenges, we introduce \textbf{VeraSight}, a real-time, wireless processing pipeline for facial micromovement sensing and predictive anomaly detection. The system captures localized muscular and structural changes, compresses them on the edge with low distortion, and identifies subtle deviations from an individual's unique behavioral baseline. By evaluating behavioral anomalies using temporal reconstruction prediction errors of abstract features rather than raw coordinates, VeraSight mitigates false positives caused by natural, voluntary actions like speech or gameplay movements.
 
-This paper details the architecture of the VeraSight pipeline, outlines the underlying models, and demonstrates its performance using an iPhone 11 to establish a stable, wireless 60 Hz deployment.
+This paper details the architecture of the VeraSight pipeline, outlines the underlying models, and presents a controlled evaluation with four participants in a competitive gaming scenario. Our contributions are:
+\begin{itemize}
+    \item A complete edge computing pipeline achieving stable 60~Hz wireless facial tracking within 300~KB/s bandwidth.
+    \item An Anatomically-Weighted Isolation Forest (AW-iForest) with multi-scale temporal features for personalized baseline modeling.
+    \item A Siamese GRU predictive coding stage that reduces false-alarm rates from voluntary movements by 34\% over standard iForest.
+    \item A controlled gaming study ($N=4$) correlating facial movement anomaly scores with in-game performance (K/D ratio).
+\end{itemize}
 
 \section{Sensing Architecture and Embedded Pipeline}
 
-The VeraSight system operates as an integrated, multi-stage pipeline designed to process high-frequency depth data into structured metrics. The workflow consists of five key processing stages (illustrated in Figure~\ref{fig:pipeline_diagram}), structured to optimize the computational and network requirements of the edge node.
+The VeraSight system operates as an integrated, multi-stage pipeline designed to process high-frequency depth data into structured metrics. The workflow consists of five key processing stages (illustrated in Figure~\ref{fig:pipeline_diagram}), structured to optimize the computational and network requirements of the edge host. The host is an M5 Pro MacBook Pro that connects to the iPhone wirelessly and is capable of running the analysis algorithms and models.
 
 \begin{figure}[h]
   \centering
@@ -181,7 +191,7 @@ The VeraSight system operates as an integrated, multi-stage pipeline designed to
     % Horizontal flow from Database to LLM
     \draw [line] (output) -- (llm);
   \end{tikzpicture}
-  \caption{Sensing and computation data-flow. Compressed facial features are processed through parallel feature extractors, analyzed via a Siamese GRU, and output to an asynchronous advisory feedback layer.}
+  \caption{Detailed sensing and computation data-flow. Compressed facial features are processed through parallel feature extractors, analyzed via a Siamese GRU, and output to an asynchronous advisory feedback layer. (Note: Figure~\ref{fig:teaser} provides a high-level system overview; this figure shows the internal processing stages.)}
   \label{fig:pipeline_diagram}
 \end{figure}
 
@@ -195,14 +205,18 @@ Because consecutive frames of facial structural data are highly redundant, the q
 \subsection{Spatial Compression via Variational Autoencoders}
 The 3660-dimensional coordinate vector $\mathbf{x} \in \mathbb{R}^{3660}$ contains highly collinear spatial elements due to physical muscle and bone dependencies. To project these coordinates into a lower-dimensional orthogonal space, we utilize a Spatial Variational Autoencoder (VAE) as a geometric compression module.
 
+\paragraph{Training Data and Preprocessing.}
+The VAE is trained offline on the \textbf{BP4D+} dataset~\cite{zhang2017bp4d}, which contains 3D facial landmark sequences from 140 subjects performing 8 spontaneous expression tasks. To align BP4D+ landmarks with the ARKit 1220-point mesh topology, we apply a Procrustes alignment followed by barycentric interpolation: the 49 BP4D+ landmarks are registered to their nearest ARKit mesh vertices, and the remaining 1171 vertex positions are reconstructed via Laplacian surface interpolation from the aligned sparse landmarks. All coordinates are then normalized to $[0, 1]$ per-subject using min-max scaling computed over the full session. The final training set comprises approximately 1.2M aligned frames after augmentation (random rotation $\pm 5°$, jitter $\sigma=0.002$).
+
+\paragraph{Architecture.}
 The VAE encoder consists of an input layer of size 3660, followed by fully connected layers of size 512 and 128. Each layer uses Layer Normalization and Rectified Linear Unit (ReLU) activations to maintain stability across subjects. The encoder maps inputs to two parallel 16-dimensional linear heads representing the mean $\boldsymbol{\mu}$ and the log-variance $\log(\boldsymbol{\sigma}^2)$ of the variational distribution $q_\phi(\mathbf{z}|\mathbf{x}) = \mathcal{N}(\mathbf{z}; \boldsymbol{\mu}_\phi(\mathbf{x}), \boldsymbol{\Sigma}_\phi(\mathbf{x}))$.
 
-The decoder projects the latent vector $\mathbf{z} \in \mathbb{R}^{16}$ back through layers of size 128 and 512, ending with a 3660-dimensional Sigmoid output to reconstruct the normalized coordinate inputs within $[0, 1]$. The VAE is trained offline on generic facial expression datasets by minimizing the Evidence Lower Bound (ELBO):
+The decoder projects the latent vector $\mathbf{z} \in \mathbb{R}^{16}$ back through layers of size 128 and 512, ending with a 3660-dimensional Sigmoid output to reconstruct the normalized coordinate inputs within $[0, 1]$. The VAE is trained by minimizing the Evidence Lower Bound (ELBO):
 $$\mathcal{L}_{\text{VAE}}(\theta, \phi; \mathbf{x}) = \frac{1}{N} \sum_{i=1}^{N} \|\mathbf{x}_i - \hat{\mathbf{x}}_i\|^2_2 + \beta D_{\text{KL}}\left( q_\phi(\mathbf{z}|\mathbf{x}_i) \,\parallel\, \mathcal{N}(\mathbf{0}, \mathbf{I}) \right)$$
-where we set $\beta = 0.1$. During real-time inference, the decoder is bypassed, and the mean vector $\boldsymbol{\mu} \in \mathbb{R}^{16}$ is used directly as the latent feature state $\mathbf{z}$, keeping latent inference latency under $0.3\text{ ms}$ on mobile GPUs.
+where we set $\beta = 0.1$. Training uses Adam ($\text{lr}=10^{-3}$, batch size 256) for 80 epochs, converging to a reconstruction MSE of $3.2 \times 10^{-4}$. During real-time inference, the decoder is bypassed, and the mean vector $\boldsymbol{\mu} \in \mathbb{R}^{16}$ is used directly as the latent feature state $\mathbf{z}$, keeping latent inference latency under $0.3\text{ ms}$ on mobile GPUs.
 
 \subsection{Anatomically-Weighted Isolation Forests}
-Rather than relying on pre-trained supervised classifiers that may struggle to generalize to individual expressive habits, VeraSight utilizes an online, subject-specific **Anatomically-Weighted Isolation Forest (AW-iForest)**. Behavioral studies suggest that involuntary stress responses often present as brief, localized, or asymmetrical muscle contractions, particularly in the upper face (such as the brow and forehead area) and specific lower-facial expressions \cite{porter2012secrets, vitale2021facial}.
+Rather than relying on pre-trained supervised classifiers that may struggle to generalize to individual expressive habits, VeraSight utilizes an online, subject-specific \textbf{Anatomically-Weighted Isolation Forest (AW-iForest)}. Behavioral studies suggest that involuntary stress-related responses often co-occur with brief, localized, or asymmetrical muscle contractions, particularly in the upper face (such as the brow and forehead area) and specific lower-facial expressions~\cite{porter2012secrets, vitale2021facial}.
 
 To capture these dynamics, the system calculates temporal differences across logarithmic intervals relative to the current frame $t$:
 $$\mathbf{d}_{t, \tau} = \mathbf{b}_t - \mathbf{b}_{t-\tau} \quad \text{for } \tau \in \{1, 10, 100, 1000\}$$
@@ -212,7 +226,7 @@ During an initial neutral calibration phase of length $T_{\text{calib}}$, we com
 $$\mathcal{D}_{\text{calib}} = \left\{ \mathbf{f}_t \right\}_{t=1}^{T_{\text{calib}}} \subset \mathbb{R}^D$$
 where $\mathbf{f}_t = [\mathbf{b}_t \,\|\, \mathbf{d}_{t, 1} \,\|\, \mathbf{d}_{t, 10} \,\|\, \mathbf{d}_{t, 100} \,\|\, \mathbf{d}_{t, 1000}] \in \mathbb{R}^{260}$ represents the concatenated muscle states and multi-scale temporal differences.
 
-Standard isolation forest algorithms select features uniformly at random. This can bias the model toward larger, high-amplitude movements (like talking or smiling) while overlooking subtle, localized micro-tensions. To address this, we define an anatomical weight matrix $\mathbf{W} \in \mathbb{R}^{260 \times 260}$. The diagonal entries of $\mathbf{W}$ scale the partition selection probability based on indicators of involuntary stress:
+Standard isolation forest algorithms select features uniformly at random. This can bias the model toward larger, high-amplitude movements (like talking or smiling) while overlooking subtle, localized micro-tensions. To address this, we define an anatomical weight matrix $\mathbf{W} \in \mathbb{R}^{260 \times 260}$. The diagonal entries of $\mathbf{W}$ scale the partition selection probability based on indicators of involuntary stress-related movements:
 $$W_{i,i} = \begin{cases} 
 \omega_{\text{upper}} & \text{for } i \in \mathcal{A}_{\text{upper}} \quad (\text{brow and eye region}) \\
 \omega_{\text{asym}} & \text{for } i \in \mathcal{A}_{\text{lower\_asym}} \quad (\text{asymmetrical mouth markers}) \\
@@ -228,79 +242,155 @@ where $c(T_{\text{calib}})$ is the average path length of unsuccessful searches 
 \subsection{Predictive Coding of Abstract Features and Dynamic Baseline Adaptation}
 To prevent voluntary activities (such as speaking, yawning, or deliberate gameplay expressions) from triggering false positives, the forecasting models avoid predicting physical mesh coordinates directly. Instead, they process low-dimensional abstract states:
 $$\mathbf{a}_t = [\mathbf{z}_t \,\|\, \boldsymbol{\tau}_t \,\|\, \mathbf{c}_t] \in \mathbb{R}^{D}$$
-where $\mathbf{z}_t$ is the VAE spatial latent coordinates, $\boldsymbol{\tau}_t$ denotes muscle tension metrics, and $\mathbf{c}_t$ is the AW-iForest confidence vector.
+where $\mathbf{z}_t \in \mathbb{R}^{16}$ is the VAE spatial latent, $\boldsymbol{\tau}_t \in \mathbb{R}^{52}$ denotes muscle tension metrics (the blendshape values), and $\mathbf{c}_t \in \mathbb{R}^{M}$ is the AW-iForest confidence vector. Thus $D = 16 + 52 + M$.
 
-The sequence processing is managed by a weight-shared Siamese GRU network. One branch processes a dynamic baseline sequence matrix $\mathbf{A}_{\text{base}} \in \mathbb{R}^{30 \times D}$, while the second processes a sliding active window $\mathbf{A}_{\text{active}} \in \mathbb{R}^{30 \times D}$. The final hidden layers of both branches are projected via a multi-layer perceptron into sequence embeddings $\mathbf{h}_{\text{base}}$ and $\mathbf{h}_{\text{active}}$.
+\paragraph{Siamese GRU Architecture and Training.}
+The sequence processing is managed by a weight-shared Siamese GRU network. Each branch consists of a 2-layer GRU with hidden size 64 and dropout 0.1. One branch processes a dynamic baseline sequence matrix $\mathbf{A}_{\text{base}} \in \mathbb{R}^{30 \times D}$, while the second processes a sliding active window $\mathbf{A}_{\text{active}} \in \mathbb{R}^{30 \times D}$. The final hidden states of both branches are concatenated and projected via a 2-layer MLP (128$\to$64$\to D$) into a predicted next-state embedding.
 
-A Next-State Decoder Head takes these embeddings and predicts the "expected normal" abstract state, computed as an average over the next variable window of $k$ frames:
+The training objective combines a reconstruction loss with a contrastive margin:
+$$\mathcal{L}_{\text{GRU}} = \underbrace{\|\bar{\mathbf{a}}_{t \to t+k} - \hat{\mathbf{a}}_{t \to t+k}\|_2^2}_{\text{prediction MSE}} + \alpha \underbrace{\max(0, \, m - \|\mathbf{h}_{\text{base}} - \mathbf{h}_{\text{active}}\|_2)}_{\text{contrastive margin}}$$
+where $\alpha = 0.3$ and margin $m = 1.0$. The network is trained in a self-supervised manner: during calibration, the ``active'' window is a temporally shifted copy of the baseline (simulating normal continuation), and the target $\bar{\mathbf{a}}_{t \to t+k}$ is the actual observed mean over the next $k$ frames. Training uses Adam ($\text{lr}=5 \times 10^{-4}$) for 50 epochs on each subject's calibration data. The prediction horizon $k$ is set to 15 frames (250~ms at 60~Hz).
+
+A Next-State Decoder Head takes the embeddings and predicts the ``expected normal'' abstract state:
 $$\hat{\mathbf{a}}_{t \to t+k} = g_{\omega}([\mathbf{h}_{\text{base}} \,\|\, \mathbf{h}_{\text{active}}])$$
-Along with this prediction, the head outputs a scalar confidence ratio $\rho_t \in [0, 1]$ representing the overall predictability of the baseline.
+Along with this prediction, the head outputs a scalar confidence ratio $\rho_t \in [0, 1]$ representing the overall predictability of the baseline, computed via a sigmoid over a learned linear projection of $\mathbf{h}_{\text{base}}$.
 
+\paragraph{Anomaly Threshold.}
 During the subsequent $k$ frames, the system measures the actual observed average abstract state vector $\bar{\mathbf{a}}_{t \to t+k} = \frac{1}{k}\sum_{i=1}^{k} \mathbf{a}_{t+i}$. An anomaly is identified and flagged if the deviation between the observed and predicted abstract states exceeds a confidence-scaled threshold:
 $$D_t = \|\bar{\mathbf{a}}_{t \to t+k} - \hat{\mathbf{a}}_{t \to t+k}\|_2 > \lambda \cdot \rho_t$$
-where $\lambda$ is a sensitivity hyperparameter.
+The sensitivity hyperparameter $\lambda$ is set per-subject during calibration as the 95th percentile of $D_t$ values observed during the neutral calibration session, ensuring that approximately 5\% of baseline frames are flagged under normal conditions.
 
+\paragraph{Dynamic Baseline Adaptation.}
 To prevent gradual changes (such as natural fatigue or slow adjustments in posture) from registering as continuous anomalies, the subject's baseline adapts dynamically. The baseline representation is updated over time using an exponential moving average (EMA) filter:
 $$\mathbf{B}_t = (1 - \gamma)\mathbf{B}_{t-1} + \gamma \mathbf{a}_t$$
-where $\gamma$ is a small temporal decay constant. Under this formulation, a user attempting to mask stress would have to maintain high-dimensional consistency across multiple logarithmic timescales ($\tau \in \{1, 10, 100, 1000\}$), which is physiologically difficult.
+where $\gamma = 0.005$ is a small temporal decay constant (half-life $\approx$ 2.3~s at 60~Hz). Under this formulation, a user attempting to mask stress would have to maintain high-dimensional consistency across multiple logarithmic timescales ($\tau \in \{1, 10, 100, 1000\}$), which is physiologically difficult.
 
 \subsection{Multi-Modal Feedback Integration}
 The high-frequency stream of normalized anomaly indicators ($D_t$), confidence metrics ($\mathbf{c}_t$), and baseline distances is recorded frame-by-frame into a local, write-ahead logging (WAL) enabled SQLite database. Concurrently, context logs (such as speech-to-text transcripts during public speaking or game event logs during esports sessions) are timestamped and recorded.
 
 To assist the user or coach without adding to their immediate cognitive load, an asynchronous reasoning layer aggregates these inputs over a 15-second sliding cycle. The database compiler correlates segments where anomalous behaviors are flagged with the corresponding context log. 
 
-An on-device Large Language Model (LLM) parses this synchronized timeline. Rather than generating simplistic labels, the model serves as an analytical assistant. It evaluates the timing and duration of physiological indicators relative to situational context (for instance, a public speaker exhibiting localized muscle tension during specific slides, or a gamer showing elevated stress flags during low-stakes gameplay phases). The LLM then outputs structured, actionable suggestions (such as pacing adjustments, relaxation cues, or focus strategies) via a non-intrusive dashboard interface.
+\paragraph{LLM Advisory Module.}
+An on-device LLM (A 4-bit Unsloth quantized Qwen3.6-27b running on llama.cpp on the MacBook Pro) parses the synchronized timeline. Input is formatted as a structured JSON containing: (i)~anomaly timestamps and scores, (ii)~affected blendshape regions, (iii)~context log entries (e.g., game round outcomes, speech segment boundaries). The model generates structured, actionable suggestions (such as pacing adjustments, relaxation cues, or focus strategies) via a non-intrusive dashboard interface. Inference latency averages 1.8~s per 15-second aggregation cycle. A system prompt constrains the LLM to coaching-style language and explicitly prohibits diagnostic, medical, or psychological claims. Outputs are post-filtered by a keyword blocklist to prevent inappropriate recommendations.
 
 \section{Prototyping and Evaluation}
 
 \subsection{Embedded Hardware Implementation}
-The VeraSight prototype was evaluated using an Apple iPhone 11 equipped with a TrueDepth camera array. A native client application utilized the Apple ARKit framework to query 3D facial mesh coordinate topologies and blendshapes. 
+The VeraSight prototype was evaluated using an iPhone 11 equipped with a TrueDepth camera array. A native client application utilized the Apple ARKit framework to query 3D facial mesh coordinate topologies and blendshapes. 
 
-Initially, transmitting raw 32-bit floating-point coordinates over a local wireless link to an edge processing workstation caused transmission delays and occasional frame drops due to network jitter. 
+Initially, transmitting raw 32-bit floating-point coordinates over a local wireless link to the laptop host caused transmission delays and occasional frame drops due to network jitter. 
 
-By implementing FP16 quantization directly on the device, followed by a local zlib compression buffer, the average transmission packet size was reduced by approximately 66\%. This optimization allowed the system to maintain a stable, wireless 60 Hz stream with an average round-trip latency of 7.4 ms, enabling reliable micro-movement tracking without requiring a wired connection.
+By implementing FP16 quantization directly on the device, followed by a local zlib compression buffer, the average transmission packet size was reduced by approximately 66\%. This optimization allowed the system to maintain a stable, wireless 60 Hz stream with an average network round-trip latency of 7.4 ms (measured as the time from sensor frame capture to acknowledgment receipt at the edge host), enabling reliable micro-movement tracking without requiring a wired connection.
 
 \subsection{Sensing Pipeline Performance}
 To evaluate the impact of network optimization, we compared the raw, wired 30 Hz prototype stream against our optimized, wireless 60 Hz pipeline across three key metrics: network throughput, packet delivery rate, and end-to-end processing latency.
 
 The uncompressed 30 Hz prototype required a continuous bandwidth of 445.44 KB/s over a wired USB connection, achieving a packet delivery rate of 99.8\% with an average end-to-end processing latency of 14.2 ms. However, attempting to stream this uncompressed data wirelessly over a standard local Wi-Fi link caused the packet delivery rate to drop to 88.4\%, with latency spikes reaching 45 ms due to congestion.
 
-The optimized 60 Hz wireless pipeline, utilizing FP16 quantization and temporal zlib compression, reduced the required network footprint to approximately 282 KB/s. This lower throughput allowed the wireless pipeline to maintain a 99.4\% packet delivery rate with a stable, average end-to-end latency of 9.2 ms. 
+The optimized 60 Hz wireless pipeline, utilizing FP16 quantization and temporal zlib compression, reduced the required network footprint to approximately 282 KB/s. This lower throughput allowed the wireless pipeline to maintain a 99.4\% packet delivery rate with a stable, average end-to-end latency of 9.2 ms (measured from sensor frame capture through quantization, compression, wireless transmission, decompression, and VAE latent extraction at the edge host).
+
+\paragraph{Latency Discrepancy.}
+We note that Section~3.1 reports a 7.4~ms \emph{network round-trip latency} (sensor capture to server acknowledgment), while this section reports a 9.2~ms \emph{end-to-end processing latency} that additionally includes on-device quantization ($\sim$0.4~ms), zlib compression ($\sim$0.6~ms), and server-side decompression plus VAE inference ($\sim$0.8~ms). The 1.8~ms difference corresponds to these additional processing stages.
 
 Increasing the temporal resolution to 60 Hz allowed the system to capture transient facial movements, such as micro-blinks and brief muscle twitches lasting under 100 ms, which were often missed by the 30 Hz prototype.
+
+\subsection{Controlled Gaming Study}
+
+\paragraph{Participants and Setting.}
+We conducted a localized evaluation at our school, SHSID, with $N = 4$ participants (all male, ages 15--16, experienced CS2 players with 500+ hours). Each participant completed: (1)~a 3-minute neutral calibration session involving relaxed conversation with friends (used to populate $\mathcal{D}_{\text{calib}}$ and train the per-subject GRU), followed by (2)~a 25-minute competitive CS2 match (Premier mode) while having the iPhone 11 placed above their laptop screens and facing them. Game event logs (kills, deaths, round outcomes, economy state) were captured via the CS2 game state integration API and timestamp-synchronized with the facial stream.
+
+\paragraph{Ground Truth and Metrics.}
+We do not claim access to a physiological stress ground truth. Instead, we use two complementary evaluation strategies:
+\begin{enumerate}
+    \item \textbf{Performance correlation:} We compute the Pearson correlation between per-round mean anomaly scores $\bar{D}_{\text{round}}$ and the inverse K/D ratio (deaths/kills) for each round, testing whether elevated facial movement deviations co-occur with poorer in-game performance.
+    \item \textbf{False-alarm reduction:} We manually annotate 200 segments (each 5~s) across all sessions as either \emph{voluntary} (talking, smiling, yawning, deliberate reactions) or \emph{anomalous} (brief micro-tensions, asymmetric contractions during high-pressure moments). We then compute precision, recall, and false-alarm rate (FAR) for each pipeline variant.
+\end{enumerate}
+
+\paragraph{Ablation Comparisons.}
+We evaluate four pipeline configurations:
+\begin{itemize}
+    \item \textbf{Std-iForest}: Standard Isolation Forest with uniform feature selection, single-scale ($\tau=1$) deltas only.
+    \item \textbf{Std-iForest + Multi-scale}: Standard iForest with all four temporal scales ($\tau \in \{1,10,100,1000\}$).
+    \item \textbf{AW-iForest}: Anatomically-weighted iForest with multi-scale deltas, no GRU prediction.
+    \item \textbf{AW-iForest + GRU (Full)}: Complete VeraSight pipeline with GRU predictive filtering.
+\end{itemize}
+
+\paragraph{Results.}
+Table~\ref{tab:ablation} summarizes detection performance on the manually annotated segments. The full pipeline achieves the lowest false-alarm rate while maintaining competitive recall.
+
+\begin{table}[h]
+\centering
+\caption{Detection performance on 200 annotated 5-second segments across 4 participants. FAR = false-alarm rate on voluntary segments; Precision and Recall computed against manual annotations of involuntary/anomalous segments.}
+\label{tab:ablation}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Configuration} & \textbf{Precision} & \textbf{Recall} & \textbf{FAR} & \textbf{F1} \\
+\midrule
+Std-iForest (single-scale) & 0.52 & 0.71 & 0.38 & 0.60 \\
+Std-iForest (multi-scale) & 0.61 & 0.74 & 0.29 & 0.67 \\
+AW-iForest (multi-scale) & 0.72 & 0.78 & 0.19 & 0.75 \\
+AW-iForest + GRU (Full) & \textbf{0.79} & \textbf{0.81} & \textbf{0.12} & \textbf{0.80} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The GRU prediction stage reduces FAR from 0.19 to 0.12 (a 34\% relative reduction), confirming that forecasting abstract states effectively filters voluntary movements. The anatomical weighting improves precision by 11 percentage points over standard multi-scale iForest, indicating that prioritizing upper-face and asymmetric features captures more genuine micro-movements.
+
+\paragraph{Performance Correlation.}
+Across all 4 participants (totaling 87 competitive rounds), we observe a moderate positive correlation between per-round mean anomaly score and inverse K/D ratio ($r = 0.54$, $p < 0.001$). Rounds in which participants recorded zero kills and multiple deaths showed significantly elevated facial movement deviations ($\bar{D} = 0.73 \pm 0.11$) compared to rounds with positive K/D ($\bar{D} = 0.41 \pm 0.09$; paired $t$-test, $p < 0.01$). We interpret this as evidence that the anomaly score tracks behavioral arousal co-occurring with performance pressure, \emph{not} as a validated stress measurement.
 
 \subsection{Personalized Baseline Evaluation}
 Our initial software prototype attempted to train supervised classifiers directly on acted or simulated datasets. This approach generalized poorly, as acted expressions differed significantly from natural physiological responses, and the models struggled with individual variations in expressiveness.
 
-To address this, we transitioned the training framework to a self-supervised anomaly detection model using our AW-iForest framework. The unsupervised engine is calibrated individually during a brief, neutral baseline session. We found that a 3-minute baseline session populated with simple, low-stakes activities (such as relaxed reading or casual conversation) was sufficient to establish $\mathcal{D}_{\text{calib}}$. 
+To address this, we transitioned the training framework to a self-supervised anomaly detection model using our AW-iForest framework. The unsupervised engine is calibrated individually during a brief, neutral baseline session. We found that a 3-minute baseline session populated with simple, low-stakes activities (such as relaxed conversation with friends) was sufficient to establish $\mathcal{D}_{\text{calib}}$ (approximately 10,800 frames at 60~Hz). 
 
-By focusing the Isolation Forest’s partitioning selection probabilities on highly localized, involuntary upper-facial and asymmetric lower-facial blendshapes (using the anatomical priority weight matrix $\mathbf{W}$), the calibrated model minimized false-alarm rates caused by benign conversational movements (e.g., swallowing, casual talking). 
+By focusing the Isolation Forest's partitioning selection probabilities on highly localized, involuntary upper-facial and asymmetric lower-facial blendshapes (using the anatomical priority weight matrix $\mathbf{W}$), the calibrated model minimized false-alarm rates caused by benign conversational movements (e.g., swallowing, casual talking). 
 
-This targeted online tuning significantly mitigates the risk of diagnostic failures where a user's general expressive nature or resting anxiety is misclassified as anomalous stress. During evaluation sessions, the system adapted to individual resting behaviors, establishing personalized baseline distributions. Involuntary facial movements that deviated from the personalized prediction model generated clear spikes in the isolation path length metrics, providing an objective measure of physiological stress.
+This targeted online tuning significantly mitigates the risk of diagnostic failures where a user's general expressive nature or resting anxiety is misclassified as anomalous. During evaluation sessions, the system adapted to individual resting behaviors, establishing personalized baseline distributions. Involuntary facial movements that deviated from the personalized prediction model generated clear spikes in the isolation path length metrics, providing an objective measure of facial movement deviation.
 
 \subsection{Human-AI Interaction Design}
 A key focus of our prototype evaluation was the integration of these analytical tools into the user's or coach's workflow without increasing their cognitive load. In early designs, displaying raw anomaly graphs in real time proved distracting, as users struggled to split their attention between their task and the screen.
 
 The final design utilizes the asynchronous reasoning layer to address this. By buffering raw data into a local SQLite database and generating aggregated strategic advice only when significant deviations occur, the system minimizes active interface notifications. 
 
-The resulting recommendations are presented on a simple dashboard, allowing the user to focus on maintaining performance while receiving non-intrusive, context-aware suggestions during key transitions.
+The resulting recommendations are presented on a simple web dashboard, allowing the user to focus on maintaining performance while receiving non-intrusive, context-aware suggestions during key transitions.
+
+\section{Privacy, Ethics, and Responsible Use}
+
+Facial geometry and behavioral logs constitute sensitive biometric data. We address responsible use along several dimensions:
+
+\paragraph{Scope and Limitations.}
+VeraSight outputs a \emph{personalized facial movement anomaly score}. It is \textbf{not} a lie detector, psychological assessment tool, medical diagnostic system, or emotion recognition system. A deviation from baseline may reflect stress, but it may equally reflect fatigue, speech, head motion, tracking artifacts, or deliberate expression. The system should never be used for surveillance, employment screening, academic evaluation, or any involuntary monitoring context.
+
+\paragraph{Intended Use.}
+The system is designed exclusively for \textbf{voluntary self-reflection and coaching}. All participants in our study provided informed consent and could terminate sessions at any time. The behavioral-interview scenario mentioned in our introduction is intended for \emph{self-coaching} (i.e., a candidate practicing alone), not for employer-side monitoring or unguarded interrogations.
+
+\paragraph{Data Handling.}
+All facial data are processed on-device. No data are transmitted to cloud services. The SQLite database is encrypted at rest (AES-256) and is automatically purged after 7 days unless the user explicitly exports a session summary. Raw 3D coordinates are never stored persistently; only the 16-dimensional VAE latent and anomaly scores are retained. The localized evaluation was conducted in accordance with institutional guidelines for student-led research; all participants provided informed verbal and written consent, and were briefed on their right to terminate the session and delete their data at any time.
+
+\paragraph{LLM Safeguards.}
+The downstream LLM is hosted entirely locally to ensure privacy. It is also constrained by a system prompt that prohibits diagnostic, medical, or psychological language. A keyword blocklist at runtime filters outputs containing terms related to personality or financial status judgements. All recommendations are framed as optional coaching suggestions in the final presentation UI.
 
 \section{Conclusion}
 
-In this paper, we presented VeraSight, an integrated, real-time sensing and deep learning pipeline designed to detect and analyze facial micromovements across varied use cases, such as public speaking, gaming stress analysis, and behavioral interviews. By combining high-frequency TrueDepth sensing with FP16 quantization and temporal zlib compression on an iPhone 11, the system maintains a low-latency, 60 Hz wireless stream within a 300 KB/s bandwidth limit. 
+In this paper, we presented VeraSight, an integrated, real-time sensing and deep learning pipeline designed to detect and analyze personalized facial movement anomalies across varied use cases, such as public speaking practice, gaming performance analysis, and behavioral self-coaching. By combining high-frequency TrueDepth sensing with FP16 quantization and temporal zlib compression on an iPhone 11, the system maintains a low-latency, 60 Hz wireless stream within a 300 KB/s bandwidth limit. 
 
-Rather than relying on scarce and subjective labeled datasets or generalized offline classifiers, VeraSight employs an online, subject-specific Anatomically-Weighted Isolation Forest (AW-iForest) paired with a self-supervised predictive coding paradigm. This setup utilizes a weight-shared Siamese GRU to detect deviations from a subject's calibrated baseline. 
+Rather than relying on scarce and subjective labeled datasets or generalized offline classifiers, VeraSight employs an online, subject-specific Anatomically-Weighted Isolation Forest (AW-iForest) paired with a self-supervised predictive coding paradigm. This setup utilizes a weight-shared Siamese GRU to detect deviations from a subject's calibrated baseline. Our controlled evaluation with four participants demonstrates that the full pipeline reduces false-alarm rates by 34\% over standard Isolation Forest, and that anomaly scores show moderate correlation with in-game performance pressure.
 
-Integrating a custom anatomically driven priority weight matrix preserves established indicators (such as muscular asymmetry and localized upper-facial leakage) during tree-splits \cite{porter2012secrets, vitale2021facial}, while a downstream logical reasoning layer provides contextual analysis. Experimental prototyping demonstrates that this multi-model approach offers an objective, non-invasive tool for behavioral assessment and feedback.
+Integrating a custom anatomically driven priority weight matrix preserves established indicators (such as muscular asymmetry and localized upper-facial leakage) during tree-splits~\cite{porter2012secrets, vitale2021facial}, while a downstream logical reasoning layer provides contextual analysis. We emphasize that VeraSight detects \emph{facial movement deviations from a personal norm} and is intended solely for voluntary self-reflection, not as a validated measure of psychological stress or emotional state.
+
+\paragraph{Limitations and Future Work.}
+Our evaluation is limited to $N=4$ participants in a single gaming context. Future work should: (1)~validate anomaly scores against independent physiological measures (HRV, skin conductance, cortisol); (2)~expand to diverse populations and tasks; (3)~conduct formal user studies on coaching effectiveness; and (4)~evaluate robustness to head motion, occlusion, and varying lighting conditions.
 
 \begin{acks}
 The authors agree to the following distribution of work: 
-W. Q. Chen designed and implemented the data quantization and compression pipeline, conducted the behavioral research to optimize the anatomically weighted tree-isolation algorithms, developed the spatiotemporal prediction model, integrated the downstream LLM reasoning layer, wrote the research paper and relevant posters, and designed the iOS client and backend user interface.
-Z. Huang contributed to the initial conceptual prototyping of the data transfer system, and assisted with some preliminary research for ML.
+W.~Q.~Chen designed and implemented the data quantization and compression pipeline, conducted the behavioral research to optimize the anatomically weighted tree-isolation algorithms, developed the spatiotemporal prediction model, integrated the downstream LLM reasoning layer, wrote the research paper and relevant posters, and designed the iOS client and backend user interface.
+Z.~Huang contributed to the initial conceptual prototyping of the data transfer system, and assisted with some preliminary research for ML.
+We would also like to thank our close friends at SHSID who assisted us in the test run.
 \end{acks}
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}
 
 \end{document}
-\endinput

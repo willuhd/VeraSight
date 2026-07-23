@@ -21,3 +21,6 @@ Temporary Items
 # Python environment
 .venv
 .env
+
+# Project specific
+core
